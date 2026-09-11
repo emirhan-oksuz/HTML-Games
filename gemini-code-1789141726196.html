@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi Recent Games Launcher — Ultimate Hybrid Edition</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030712; --card-bg: rgba(30, 41, 59, 0.85);
+      --accent: #00fff0; --neon2: #ff00d7; --text: #f8fafc; --text-dim: #94a3b8;
+      --cell-size: 38px;
+    }
+    * { box-sizing: border-box; user-select: none; margin: 0; padding: 0; font-family: 'Outfit', sans-serif; }
+    body { background: radial-gradient(circle at 50% 30%, #1e1b4b 0%, #090d16 60%, #030712 100%); color: var(--text); height: 100vh; overflow: hidden; }
+
+    /* === LAUNCHER === */
+    #launcherView { display: flex; flex-direction: column; justify-content: space-between; height: 100vh; padding: 20px 0; }
+    .top-search { padding: 0 20px; display: flex; justify-content: center; }
+    .search-box { background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 8px 16px; width: 100%; max-width: 400px; display: flex; gap: 10px; }
+    .search-box input { background: transparent; border: none; outline: none; color: var(--text); font-size: 14px; width: 100%; }
+
+    .recent-container { 
+      flex: 1; display: flex; align-items: center; overflow-x: auto; 
+      scroll-snap-type: x mandatory; scroll-behavior: smooth;
+      padding: 0 calc(50vw - 140px); gap: 20px; scrollbar-width: none; 
+    }
+    .recent-container::-webkit-scrollbar { display: none; }
+
+    .card {
+      min-width: 280px; width: 280px; height: 440px; background: var(--card-bg); backdrop-filter: blur(15px);
+      border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 24px;
+      scroll-snap-align: center; scroll-snap-stop: always;
+      display: flex; flex-direction: column; box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+      transition: transform 0.25s ease, opacity 0.25s ease, border-color 0.25s;
+      cursor: pointer; position: relative; overflow: hidden; opacity: 0.45; transform: scale(0.88);
+    }
+    .card.active-center {
+      border-color: var(--accent); opacity: 1; transform: scale(1.04);
+      box-shadow: 0 0 30px rgba(0, 255, 240, 0.25), 0 15px 35px rgba(0,0,0,0.8);
+    }
+    .card-header { display: flex; gap: 10px; padding: 12px 14px; background: rgba(0,0,0,0.25); border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .app-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; background: rgba(255,255,255,0.1); }
+    .app-title { font-weight: 600; font-size: 14px; } .app-time { font-size: 11px; color: var(--text-dim); }
+    .card-body { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 18px; position: relative; }
+    .card-body::before { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(30, 41, 59, 0.95) 0%, transparent 80%); }
+    .game-meta { position: relative; z-index: 2; }
+    .game-badge { font-size: 9px; font-weight: 800; padding: 3px 8px; border-radius: 8px; background: rgba(0, 255, 240, 0.15); color: var(--accent); border: 1px solid rgba(0, 255, 240, 0.3); display: inline-block; margin-bottom: 6px; }
+    .game-desc { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+    .launch-hint { width: 100%; padding: 10px; border-radius: 12px; background: linear-gradient(90deg, var(--accent), #0284c7); color: #000; font-weight: 800; font-size: 13px; text-align: center; }
+
+    /* === OYUN PENCERESİ === */
+    .game-view { display: none; flex-direction: column; height: 100vh; background: #050508; padding: 16px; position: relative; }
+    .game-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; z-index: 100; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+    .back-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 16px; border-radius: 12px; font-weight: 600; cursor: pointer; font-size: 13px; transition: 0.2s; }
+    .back-btn:hover { background: rgba(255,255,255,0.25); }
+
+    /* --- 1. NONOGRAM --- */
+    #game-nonogram { align-items: flex-start; }
+    .nono-wide-layout { display: flex; gap: 30px; width: 100%; height: calc(100vh - 80px); }
+    .nono-panel { width: 320px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+    .nono-panel label { font-size: 11px; color: var(--text-dim); font-weight: 800; margin-bottom: 4px; display: block; }
+    .nono-panel select, .nono-panel button { width: 100%; padding: 12px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #fff; font-weight: bold; font-size: 13px; cursor: pointer; }
+    .nono-board-area { flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: flex-start; padding: 10px; }
+    .nonogram-container { display: grid; gap: 4px; }
+    .col-clues, .row-clues { display: flex; } .row-clues { flex-direction: column; }
+    .col-stack, .row-line { display: flex; align-items: center; justify-content: flex-end; gap: 3px; }
+    .col-stack { width: var(--cell-size); flex-direction: column; } .row-line { height: var(--cell-size); padding-right: 8px; }
+    .clue-num { font-size: 12px; font-weight: 800; color: var(--accent); }
+    .grid { display: grid; background: rgba(0,0,0,0.9); border: 2px solid var(--accent); border-radius: 6px; }
+    .cell { width: var(--cell-size); height: var(--cell-size); border-right: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .cell[data-state="filled"] { background: linear-gradient(135deg, var(--accent), var(--neon2)); }
+    .cell .x-mark { color: var(--neon2); font-weight: 900; font-size: 16px; }
+
+    /* --- 2. CYBER DRIFT 2077 --- */
+    #game-drift { align-items: center; }
+    .drift-road { width: 400px; height: 460px; border-left: 4px solid var(--accent); border-right: 4px solid var(--accent); position: relative; overflow: hidden; background: #070a12; display: flex; }
+    .drift-lane { flex: 1; border-right: 1px dashed rgba(255,255,255,0.12); cursor: pointer; }
+    
+    .drift-car-svg { width: 38px; height: 60px; position: absolute; bottom: 20px; transition: left 0.1s ease-out; z-index: 10; filter: drop-shadow(0 0 10px var(--accent)); }
+    .drift-police-svg { width: 38px; height: 60px; position: absolute; z-index: 5; filter: drop-shadow(0 0 10px #ef4444); }
+    
+    .drift-controls-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; justify-content: center; }
+    .drift-custom-box { display: none; gap: 8px; align-items: center; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 8px; }
+    .drift-custom-box input { width: 45px; background: #000; border: 1px solid var(--accent); color: #fff; text-align: center; font-weight: bold; border-radius: 4px; padding: 2px; }
+
+    .drift-dashboard { display: flex; gap: 20px; background: rgba(255,255,255,0.05); padding: 10px 20px; border-radius: 14px; margin-top: 10px; border: 1px solid rgba(255,255,255,0.1); }
+    .dash-box { text-align: center; } .dash-val { font-size: 16px; font-weight: 800; color: var(--accent); }
+
+    /* --- 3. RETRO SPACE REALITY --- */
+    #game-space { align-items: center; }
+    .space-area { width: 400px; height: 420px; border: 2px solid #38bdf8; position: relative; overflow: hidden; background: #020408; cursor: crosshair; }
+    
+    .vector-ship { width: 36px; height: 36px; position: absolute; bottom: 15px; z-index: 10; filter: drop-shadow(0 0 8px #38bdf8); pointer-events: none; }
+    .vector-alien { width: 32px; height: 32px; position: absolute; z-index: 5; filter: drop-shadow(0 0 8px #a855f7); }
+    .vector-laser { width: 4px; height: 18px; background: #00fff0; position: absolute; box-shadow: 0 0 10px #00fff0; border-radius: 2px; }
+    .charge-beam { width: 40px; height: 420px; background: linear-gradient(180deg, #ff00d7, #00fff0); position: absolute; box-shadow: 0 0 30px #ff00d7; border-radius: 15px; z-index: 8; }
+    
+    .fourth-wall-eye { position: absolute; top: 12px; right: 12px; width: 36px; height: 36px; cursor: pointer; z-index: 20; transition: transform 0.1s; }
+    .speech-bubble { position: absolute; top: 50px; right: 12px; background: var(--neon2); color: #fff; padding: 8px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; max-width: 180px; display: none; z-index: 30; box-shadow: 0 0 15px rgba(255,0,215,0.6); }
+
+    .space-hud { width: 400px; margin-top: 10px; display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
+    .ult-bar-container { display: flex; align-items: center; gap: 10px; }
+    .ult-progress-bg { flex: 1; height: 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--neon2); border-radius: 8px; overflow: hidden; position: relative; }
+    .ult-progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #00fff0, #ff00d7); transition: width 0.05s linear; }
+    .btn-ult-trigger { background: linear-gradient(90deg, #ff00d7, #f43f5e); color: #fff; border: none; padding: 8px; border-radius: 8px; font-weight: 800; cursor: pointer; font-size: 12px; width: 100%; opacity: 0.5; pointer-events: none; }
+    .btn-ult-trigger.ready { opacity: 1; pointer-events: auto; animation: pulse 0.8s infinite alternate; }
+    @keyframes pulse { 0% { transform: scale(1); } 100% { transform: scale(1.02); box-shadow: 0 0 15px #ff00d7; } }
+
+    /* --- 4. PIXEL DUNGEON QUEST --- */
+    #game-dungeon { align-items: center; }
+    .dungeon-grid { display: grid; grid-template-columns: repeat(6, 52px); gap: 6px; justify-content: center; margin-top: 15px; }
+    .dun-cell { width: 52px; height: 52px; background: #1e1b4b; border: 2px solid #312e81; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+    
+    .dun-cell.wall { background: #0f172a !important; border: 2px dashed #475569 !important; }
+    .dun-cell.wall::after { content: ''; width: 50%; height: 50%; border: 1px dashed #64748b; }
+    
+    .dun-cell.fog { background: #020617 !important; border-color: #0f172a !important; }
+    .dun-cell.fog * { display: none !important; }
+    
+    .dun-icon { width: 32px; height: 32px; }
+    .dun-msg { text-align: center; color: var(--accent); margin-top: 15px; font-size: 14px; font-weight: bold; height: 24px; }
+  </style>
+</head>
+<body>
+
+  <!-- LAUNCHER -->
+  <div id="launcherView">
+    <div class="top-search">
+      <div class="search-box"><span>🔍</span><input type="text" id="searchInput" placeholder="Oyunlarda ara..." /></div>
+    </div>
+    
+    <div class="recent-container" id="recentContainer"></div>
+    <div style="text-align:center; font-size:12px; color:var(--text-dim); padding:5px;">🎯 Tıkla ve Odaklan | Ortadayken Tıkla Başlat</div>
+  </div>
+
+  <!-- OYUN 1: NEON NONOGRAM PRO -->
+  <div id="game-nonogram" class="game-view">
+    <div class="game-header" style="width:100%;">
+      <button class="back-btn" onclick="closeGame()">← Menüye Dön</button>
+      <h2 style="color:var(--accent); font-size:16px;">Neon Nonogram Pro</h2>
+      <div id="nono-timer" style="font-weight:bold;">00:00</div>
+    </div>
+
+    <div class="nono-wide-layout">
+      <div class="nono-panel">
+        <div>
+          <label>BOYUT</label>
+          <select id="nono-size"><option value="5">5 x 5</option><option value="8">8 x 8</option><option value="10" selected>10 x 10</option><option value="12">12 x 12</option></select>
+        </div>
+        <div>
+          <label>ZORLUK DENSİTESİ</label>
+          <select id="nono-density"><option value="35">Kolay (%35)</option><option value="45" selected>Orta (%45)</option><option value="55">Zor (%55)</option></select>
+        </div>
+        <div>
+          <label>ÇİZİM MODU</label>
+          <button id="btnModeToggle" style="background:var(--accent); color:#000;">🟦 Kutu Doldur</button>
+        </div>
+        <button id="btnNew" style="background:rgba(255,255,255,0.1);">🔄 Yeniden Başlat</button>
+        <button id="btnCheck" style="background:rgba(255,255,255,0.1);">✅ Kontrol Et</button>
+        <button id="btnSolve" style="background:linear-gradient(90deg, var(--neon2), #f43f5e);">💡 Çözümü Göster</button>
+      </div>
+
+      <div class="nono-board-area">
+        <div class="nonogram-container">
+          <div style="grid-column:1; grid-row:1;"></div>
+          <div class="col-clues" id="colClues" style="grid-column:2; grid-row:1;"></div>
+          <div class="row-clues" id="rowClues" style="grid-column:1; grid-row:2;"></div>
+          <div id="nono-grid" class="grid" style="grid-column:2; grid-row:2;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OYUN 2: CYBER DRIFT 2077 -->
+  <div id="game-drift" class="game-view">
+    <div class="game-header" style="width:400px;">
+      <button class="back-btn" onclick="closeGame()">← Menüye Dön</button>
+      <h2 style="color:var(--neon2); font-size:16px;">Cyber Drift 2077</h2>
+      <div id="drift-score" style="font-weight:bold; color:var(--accent);">Skor: 0</div>
+    </div>
+
+    <div class="drift-controls-bar">
+      <select id="drift-lanes-count" onchange="initDrift()" style="padding:6px 12px; background:#1e293b; color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:8px; font-weight:bold;">
+        <option value="3">3 Şerit</option>
+        <option value="4">4 Şerit</option>
+        <option value="5" selected>5 Şerit</option>
+      </select>
+
+      <select id="drift-diff" onchange="handleDriftDiffChange()" style="padding:6px 12px; background:#1e293b; color:#fff; border:1px solid rgba(255,255,255,0.2); border-radius:8px; font-weight:bold;">
+        <option value="easy">Çok Kolay</option>
+        <option value="medium" selected>Normal</option>
+        <option value="hard">Zor</option>
+        <option value="custom">Özel...</option>
+      </select>
+
+      <div class="drift-custom-box" id="driftCustomBox">
+        <label style="font-size:10px;">Min:</label>
+        <input type="number" id="customMinCars" value="1" min="0" max="4" onchange="validateCustomCars()" />
+        <label style="font-size:10px;">Max:</label>
+        <input type="number" id="customMaxCars" value="2" min="0" max="4" onchange="validateCustomCars()" />
+      </div>
+    </div>
+
+    <div class="drift-road" id="drift-road"></div>
+
+    <div class="drift-dashboard">
+      <div class="dash-box"><div style="font-size:10px; color:#888;">HIZ</div><div class="dash-val" id="dash-speed">120 km/h</div></div>
+      <div class="dash-box"><div style="font-size:10px; color:#888;">MESAFE</div><div class="dash-val" id="dash-dist">0.0 km</div></div>
+    </div>
+    <p style="color:#888; font-size:11px; margin-top:6px;" id="drift-keys-hint">[1,2,3,4,5] tuşları veya şeritlere tıklayarak sür!</p>
+  </div>
+
+  <!-- OYUN 3: RETRO SPACE REALITY -->
+  <div id="game-space" class="game-view">
+    <div class="game-header" style="width:400px;">
+      <button class="back-btn" onclick="closeGame()">← Menüye Dön</button>
+      <h2 style="color:#38bdf8; font-size:16px;">Retro Space Reality</h2>
+      <div id="space-score" style="font-weight:bold;">Skor: 0</div>
+    </div>
+
+    <div class="space-area" id="space-area">
+      <svg class="vector-ship" id="space-ship" viewBox="0 0 40 40">
+        <path d="M20 2 L35 38 L20 30 L5 38 Z" fill="#38bdf8" stroke="#fff" stroke-width="2"/>
+      </svg>
+
+      <svg class="fourth-wall-eye" id="easterEggGuy" viewBox="0 0 40 40">
+        <circle cx="20" cy="20" r="18" fill="#ff00d7" />
+        <circle cx="20" cy="20" r="10" fill="#fff" />
+        <circle cx="20" cy="20" r="4" fill="#000" />
+      </svg>
+      <div class="speech-bubble" id="speechBubble"></div>
+    </div>
+
+    <div class="space-hud">
+      <div class="ult-bar-container">
+        <span style="font-size:11px; font-weight:800; color:var(--neon2);">ULTİ ŞARJI:</span>
+        <div class="ult-progress-bg">
+          <div class="ult-progress-fill" id="ultFill"></div>
+        </div>
+      </div>
+      <button class="btn-ult-trigger" id="btnUltTrigger" onclick="fireUltBeam()">🚀 MEGA ULTİ AT (SPACE)</button>
+    </div>
+    <p style="color:#888; font-size:11px; margin-top:4px;">Sol Tık: Ateş Et (Göze vurursan tepki verir) | Space: Mega Ulti!</p>
+  </div>
+
+  <!-- OYUN 4: PIXEL DUNGEON QUEST -->
+  <div id="game-dungeon" class="game-view">
+    <div class="game-header" style="width:380px;">
+      <button class="back-btn" onclick="closeGame()">← Menüye Dön</button>
+      <h2 style="color:#a78bfa; font-size:16px;">Pixel Dungeon Quest</h2>
+      <div id="dun-hp" style="font-weight:bold; color:#fb7185;">HP: ❤️❤️❤️</div>
+    </div>
+
+    <div class="dungeon-grid" id="dun-grid"></div>
+    <div class="dun-msg" id="dun-msg">Zindanı keşfet, duvarların etrafından dolaş!</div>
+  </div>
+
+  <script>
+    const SVG_ICONS = {
+      hero: `<svg class="dun-icon" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#3b82f6"/><path d="M12 25 Q 20 32 28 25" stroke="#fff" stroke-width="3" fill="none"/><circle cx="14" cy="16" r="3" fill="#fff"/><circle cx="26" cy="16" r="3" fill="#fff"/></svg>`,
+      monster: `<svg class="dun-icon" viewBox="0 0 40 40"><rect x="6" y="6" width="28" height="28" rx="6" fill="#ef4444"/><circle cx="14" cy="16" r="4" fill="#000"/><circle cx="26" cy="16" r="4" fill="#000"/><path d="M12 28 L28 28" stroke="#000" stroke-width="3"/></svg>`,
+      door: `<svg class="dun-icon" viewBox="0 0 40 40"><rect x="8" y="4" width="24" height="32" rx="4" fill="#eab308"/><circle cx="26" cy="20" r="3" fill="#000"/></svg>`,
+      potion: `<svg class="dun-icon" viewBox="0 0 40 40"><path d="M16 8 L24 8 L24 14 L30 24 A 10 10 0 0 1 10 24 L16 14 Z" fill="#10b981"/><rect x="14" y="4" width="12" height="4" fill="#6ee7b7"/></svg>`,
+      bone: `<svg class="dun-icon" viewBox="0 0 40 40"><path d="M10 18 C 6 14 6 22 10 20 L 30 20 C 34 22 34 14 30 18 Z" fill="#94a3b8"/></svg>`
+    };
+
+    const games = [
+      { id: 'nonogram', title: 'Neon Nonogram Pro', category: 'MANTIK', time: 'Şimdi', icon: '🟩', desc: 'Sola hizalı geniş panel ve çözücü.', color: '#00fff0' },
+      { id: 'drift', title: 'Cyber Drift 2077', category: 'YARIŞ', time: '5 dk önce', icon: '🏎️', desc: 'Dinamik şerit seçmeli ve trafikli yarış.', color: '#ff00d7' },
+      { id: 'space', title: 'Retro Space Reality', category: 'AKSİYON', time: '12 dk önce', icon: '🚀', desc: 'Çift göz tepki mekanizmalı uzay.', color: '#38bdf8' },
+      { id: 'dungeon', title: 'Pixel Dungeon Quest', category: 'RPG', time: '1 saat önce', icon: '⚔️', desc: 'Çapraz görüşlü ve zeki yaratıklı zindan.', color: '#a78bfa' }
+    ];
+
+    const container = document.getElementById('recentContainer');
+    let activeGameLoop = null;
+
+    function renderCards(list) {
+      container.innerHTML = '';
+      list.forEach((game) => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="card-header"><div class="app-icon" style="box-shadow: 0 0 10px ${game.color}">${game.icon}</div>
+          <div><div class="app-title">${game.title}</div><div class="app-time">${game.time}</div></div></div>
+          <div class="card-body"><div style="font-size: 54px; text-align: center; margin-bottom: 20px;">${game.icon}</div>
+          <div class="game-meta"><span class="game-badge" style="color:${game.color}; border-color:${game.color}">${game.category}</span>
+          <p class="game-desc">${game.desc}</p><div class="launch-hint" style="background: linear-gradient(90deg, ${game.color}, #000); color:#fff">OYNA</div></div></div>
+        `;
+        card.onclick = () => handleCardClick(card, game.id);
+        container.appendChild(card);
+      });
+      setTimeout(updateFocus, 100);
+    }
+
+    function handleCardClick(card, gameId) {
+      const cCenter = container.getBoundingClientRect().left + container.offsetWidth / 2;
+      const cardCenter = card.getBoundingClientRect().left + card.offsetWidth / 2;
+      if (Math.abs(cCenter - cardCenter) > 35) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      } else {
+        launchGame(gameId);
+      }
+    }
+
+    function updateFocus() {
+      const cCenter = container.getBoundingClientRect().left + container.offsetWidth / 2;
+      document.querySelectorAll('.card').forEach(card => {
+        const cardCenter = card.getBoundingClientRect().left + card.offsetWidth / 2;
+        if (Math.abs(cCenter - cardCenter) < 45) card.classList.add('active-center');
+        else card.classList.remove('active-center');
+      });
+    }
+
+    container.addEventListener('scroll', updateFocus);
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      renderCards(games.filter(g => g.title.toLowerCase().includes(e.target.value.toLowerCase())));
+    });
+
+    function launchGame(gameId) {
+      document.getElementById('launcherView').style.display = 'none';
+      document.getElementById('game-' + gameId).style.display = 'flex';
+      if(gameId === 'nonogram') initNonogram();
+      if(gameId === 'drift') initDrift();
+      if(gameId === 'space') initSpace();
+      if(gameId === 'dungeon') initDungeon();
+    }
+
+    function closeGame() {
+      document.querySelectorAll('.game-view').forEach(v => v.style.display = 'none');
+      document.getElementById('launcherView').style.display = 'flex';
+      clearInterval(activeGameLoop);
+      window.onkeydown = null;
+    }
+
+    // ==========================================
+    // 1. NEON NONOGRAM PRO
+    // ==========================================
+    let N = 10, sol = [], grid = [], clickMode = 'fill', sec = 0;
+    
+    function initNonogram() {
+      clearInterval(activeGameLoop);
+      N = +document.getElementById('nono-size').value;
+      const density = +document.getElementById('nono-density').value / 100;
+      const gEl = document.getElementById('nono-grid');
+      gEl.style.gridTemplateColumns = `repeat(${N}, var(--cell-size))`;
+      gEl.innerHTML = '';
+      
+      grid = Array.from({length: N}, () => Array(N).fill(0));
+      sol = Array.from({length: N}, () => Array(N).fill(0).map(() => Math.random() < density ? 1 : 0));
+      
+      renderClues();
+      for (let r=0; r<N; r++) {
+        for (let c=0; c<N; c++) {
+          let cell = document.createElement('div'); cell.className = 'cell';
+          cell.onclick = () => hitNono(cell, r, c, clickMode);
+          cell.oncontextmenu = (e) => { e.preventDefault(); hitNono(cell, r, c, 'cross'); };
+          gEl.appendChild(cell);
+        }
+      }
+      sec = 0; activeGameLoop = setInterval(() => {
+        sec++; document.getElementById('nono-timer').textContent = `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
+      }, 1000);
+    }
+
+    function hitNono(cell, r, c, mode) {
+      if (mode === 'fill') {
+        if(cell.dataset.state === 'filled') { cell.dataset.state = ''; grid[r][c] = 0; }
+        else { cell.dataset.state = 'filled'; cell.innerHTML = ''; grid[r][c] = 1; }
+      } else {
+        if(cell.dataset.state === 'marked') { cell.dataset.state = ''; cell.innerHTML = ''; grid[r][c] = 0; }
+        else { cell.dataset.state = 'marked'; cell.innerHTML = '<span class="x-mark">✕</span>'; grid[r][c] = 0; }
+      }
+    }
+
+    function renderClues() {
+      const calc = (arr) => {
+        let res = []; let c = 0;
+        arr.forEach(v => { if(v) c++; else if(c){res.push(c); c=0;} }); if(c) res.push(c);
+        return res.length ? res : [0];
+      };
+      let rEl = document.getElementById('rowClues'), cEl = document.getElementById('colClues');
+      rEl.innerHTML = ''; cEl.innerHTML = '';
+      for(let r=0; r<N; r++) {
+        let d = document.createElement('div'); d.className = 'row-line';
+        calc(sol[r]).forEach(n => d.innerHTML += `<span class="clue-num">${n}</span>`); rEl.appendChild(d);
+      }
+      for(let c=0; c<N; c++) {
+        let colArr = []; for(let r=0; r<N; r++) colArr.push(sol[r][c]);
+        let d = document.createElement('div'); d.className = 'col-stack';
+        calc(colArr).forEach(n => d.innerHTML += `<span class="clue-num">${n}</span>`); cEl.appendChild(d);
+      }
+    }
+
+    document.getElementById('btnSolve').onclick = () => {
+      grid = JSON.parse(JSON.stringify(sol));
+      const cells = document.getElementById('nono-grid').children;
+      let i = 0;
+      for (let r=0; r<N; r++) {
+        for (let c=0; c<N; c++) {
+          cells[i].innerHTML = '';
+          cells[i].dataset.state = sol[r][c] === 1 ? 'filled' : 'marked';
+          if(sol[r][c] === 0) cells[i].innerHTML = '<span class="x-mark">✕</span>';
+          i++;
+        }
+      }
+      clearInterval(activeGameLoop);
+      document.getElementById('nono-timer').textContent = "ÇÖZÜLDÜ!";
+    };
+
+    document.getElementById('nono-size').onchange = initNonogram;
+    document.getElementById('nono-density').onchange = initNonogram;
+    document.getElementById('btnNew').onclick = initNonogram;
+    document.getElementById('btnCheck').onclick = () => alert(JSON.stringify(grid) === JSON.stringify(sol) ? '🎉 Mükemmel çözüldü!' : '❌ Hatalı kareler var.');
+    document.getElementById('btnModeToggle').onclick = function() {
+      if(clickMode === 'fill') { clickMode = 'cross'; this.textContent = '❌ X İşaretle'; this.style.background = 'var(--neon2)'; }
+      else { clickMode = 'fill'; this.textContent = '🟦 Kutu Doldur'; this.style.background = 'var(--accent)'; }
+    };
+
+
+    // ==========================================
+    // 2. CYBER DRIFT 2077
+    // ==========================================
+    let driftLane = 2, driftScore = 0, distanceKm = 0, currentSpeed = 120;
+
+    function handleDriftDiffChange() {
+      const mode = document.getElementById('drift-diff').value;
+      const box = document.getElementById('driftCustomBox');
+      box.style.display = mode === 'custom' ? 'flex' : 'none';
+      initDrift();
+    }
+
+    function validateCustomCars() {
+      const laneCount = parseInt(document.getElementById('drift-lanes-count').value) || 5;
+      let minIn = document.getElementById('customMinCars');
+      let maxIn = document.getElementById('customMaxCars');
+      let minVal = parseInt(minIn.value) || 0;
+      let maxVal = parseInt(maxIn.value) || 0;
+      minVal = Math.max(0, Math.min(laneCount - 1, minVal));
+      maxVal = Math.max(0, Math.min(laneCount - 1, maxVal));
+      if (minVal > maxVal) maxVal = minVal;
+      minIn.value = minVal; maxIn.value = maxVal;
+      initDrift();
+    }
+
+    function setDriftLane(l, laneCount) { 
+      laneCount = laneCount || parseInt(document.getElementById('drift-lanes-count').value) || 5;
+      driftLane = Math.max(0, Math.min(laneCount - 1, l)); 
+      updateDriftCar(laneCount); 
+    }
+
+    function initDrift() {
+      clearInterval(activeGameLoop);
+      const road = document.getElementById('drift-road');
+      const laneCount = parseInt(document.getElementById('drift-lanes-count').value) || 5;
+      
+      road.innerHTML = '';
+      for (let i = 0; i < laneCount; i++) {
+        let lane = document.createElement('div');
+        lane.className = 'drift-lane';
+        lane.onclick = () => setDriftLane(i, laneCount);
+        road.appendChild(lane);
+      }
+
+      let carSvg = document.createElement('div');
+      carSvg.className = 'drift-car-svg';
+      carSvg.id = 'drift-car';
+      carSvg.innerHTML = `
+        <svg viewBox="0 0 50 80" style="width:100%; height:100%;">
+          <rect x="5" y="10" width="40" height="60" rx="10" fill="#00fff0" />
+          <rect x="10" y="25" width="30" height="20" rx="4" fill="#000" />
+          <circle cx="12" cy="15" r="3" fill="#fff" /> <circle cx="38" cy="15" r="3" fill="#fff" />
+        </svg>`;
+      road.appendChild(carSvg);
+
+      driftLane = Math.floor(laneCount / 2); 
+      driftScore = 0; distanceKm = 0; currentSpeed = 120;
+      
+      let keyNums = [];
+      for(let i=1; i<=laneCount; i++) keyNums.push(i);
+      document.getElementById('drift-keys-hint').textContent = `[${keyNums.join(',')}] tuşları veya şeritlere tıklayarak sür!`;
+
+      updateDriftCar(laneCount);
+
+      window.onkeydown = (e) => {
+        if(e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') setDriftLane(driftLane - 1, laneCount);
+        if(e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') setDriftLane(driftLane + 1, laneCount);
+        let keyNum = parseInt(e.key);
+        if (!isNaN(keyNum) && keyNum >= 1 && keyNum <= laneCount) {
+          setDriftLane(keyNum - 1, laneCount);
+        }
+      };
+
+      let spawnTimer = 0;
+      activeGameLoop = setInterval(() => {
+        spawnTimer++;
+        distanceKm += (currentSpeed / 36000);
+        document.getElementById('dash-dist').textContent = distanceKm.toFixed(1) + ' km';
+        document.getElementById('dash-speed').textContent = Math.round(currentSpeed) + ' km/h';
+
+        if(spawnTimer > 35) {
+          spawnTimer = 0;
+          let minC = 1, maxC = 2;
+          const diff = document.getElementById('drift-diff').value;
+
+          if(diff === 'easy') { minC = 0; maxC = 1; }
+          else if(diff === 'medium') { minC = 1; maxC = 2; }
+          else if(diff === 'hard') { minC = Math.min(2, laneCount - 1); maxC = Math.min(3, laneCount - 1); }
+          else if(diff === 'custom') {
+            minC = parseInt(document.getElementById('customMinCars').value) || 0;
+            maxC = parseInt(document.getElementById('customMaxCars').value) || 1;
+          }
+
+          let count = Math.floor(Math.random() * (maxC - minC + 1)) + minC;
+          count = Math.min(count, laneCount - 1);
+          
+          let availableLanes = Array.from({length: laneCount}, (_, i) => i);
+          let chosenLanes = availableLanes.sort(() => Math.random() - 0.5).slice(0, count);
+          
+          let staggers = [0, -170, -80, -220, -120]; 
+
+          chosenLanes.forEach((l, idx) => {
+            let pol = document.createElement('div');
+            pol.className = 'drift-police-svg';
+            let yPos = -70 + staggers[idx % staggers.length];
+            pol.style.top = yPos + 'px';
+            
+            const laneWidthPct = 100 / laneCount;
+            pol.style.left = `calc(${l * laneWidthPct + (laneWidthPct / 2)}% - 19px)`; 
+            
+            pol.innerHTML = `
+              <svg viewBox="0 0 50 80" style="width:100%; height:100%;">
+                <rect x="5" y="10" width="40" height="60" rx="10" fill="#ef4444" />
+                <rect x="10" y="35" width="30" height="20" rx="4" fill="#000" />
+                <circle cx="12" cy="65" r="3" fill="#ff0000" /> <circle cx="38" cy="65" r="3" fill="#ff0000" />
+              </svg>`;
+            road.appendChild(pol);
+          });
+        }
+
+        const carEl = document.getElementById('drift-car');
+        if (!carEl) return;
+        const pRect = carEl.getBoundingClientRect();
+
+        document.querySelectorAll('.drift-police-svg').forEach(pol => {
+          let y = parseFloat(pol.style.top) + (currentSpeed / 18);
+          pol.style.top = y + 'px';
+
+          const polRect = pol.getBoundingClientRect();
+          if (!(pRect.right < polRect.left + 5 || pRect.left > polRect.right - 5 || pRect.bottom < polRect.top + 5 || pRect.top > polRect.bottom - 5)) {
+            alert(`💥 ÇARPIŞMA! Mesafe: ${distanceKm.toFixed(1)} km, Skor: ${driftScore}`);
+            initDrift();
+          }
+
+          if(y > 470) {
+            pol.remove(); driftScore += 15;
+            currentSpeed = Math.min(280, currentSpeed + 1);
+            document.getElementById('drift-score').textContent = 'Skor: ' + driftScore;
+          }
+        });
+      }, 20);
+    }
+
+    function updateDriftCar(laneCount) { 
+      laneCount = laneCount || parseInt(document.getElementById('drift-lanes-count').value) || 5;
+      const carEl = document.getElementById('drift-car');
+      if (carEl) {
+        const laneWidthPct = 100 / laneCount;
+        carEl.style.left = `calc(${driftLane * laneWidthPct + (laneWidthPct / 2)}% - 19px)`; 
+      }
+    }
+
+
+    // ==========================================
+    // 3. RETRO SPACE REALITY
+    // ==========================================
+    let spaceScore = 0, shipX = 180, ultCharge = 0;
+
+    function initSpace() {
+      clearInterval(activeGameLoop);
+      document.querySelectorAll('.vector-alien, .vector-laser, .charge-beam').forEach(e => e.remove());
+      spaceScore = 0; shipX = 180; ultCharge = 0;
+      updateUltBar();
+      document.getElementById('space-score').textContent = 'Skor: 0';
+
+      const area = document.getElementById('space-area');
+
+      area.onmousemove = (e) => {
+        let rect = area.getBoundingClientRect();
+        shipX = e.clientX - rect.left - 18;
+        shipX = Math.max(0, Math.min(364, shipX));
+        document.getElementById('space-ship').style.left = shipX + 'px';
+      };
+
+      area.onmousedown = () => {
+        let lz = document.createElement('div'); lz.className = 'vector-laser';
+        lz.style.left = (shipX + 16) + 'px'; lz.style.top = '370px';
+        area.appendChild(lz);
+
+        ultCharge = Math.min(100, ultCharge + 8);
+        updateUltBar();
+      };
+
+      window.onkeydown = (e) => {
+        if(e.code === 'Space') fireUltBeam();
+      };
+
+      activeGameLoop = setInterval(() => {
+        if(Math.random() < 0.05) {
+          let al = document.createElement('div'); al.className = 'vector-alien';
+          al.style.left = (Math.random() * 360) + 'px'; al.style.top = '-35px';
+          al.innerHTML = `<svg viewBox="0 0 40 40"><path d="M10 10 L30 10 L35 25 L20 35 L5 25 Z" fill="#a855f7"/><circle cx="15" cy="20" r="3" fill="#fff"/><circle cx="25" cy="20" r="3" fill="#fff"/></svg>`;
+          area.appendChild(al);
+        }
+
+        document.querySelectorAll('.vector-alien').forEach(al => {
+          let y = parseFloat(al.style.top) + 2; al.style.top = y + 'px';
+          if(y > 420) { alert('Uzaylılar Alanı İstilâ Etti!'); initSpace(); }
+        });
+
+        document.querySelectorAll('.vector-laser').forEach(lz => {
+          let ly = parseFloat(lz.style.top) - 12; lz.style.top = ly + 'px';
+          let lx = parseFloat(lz.style.left);
+
+          if(ly < 45 && lx > 340) {
+            lz.remove();
+            triggerEyeReaction("NORMAL");
+          } else if(ly < 0) {
+            lz.remove();
+          } else {
+            document.querySelectorAll('.vector-alien').forEach(al => {
+              let ax = parseFloat(al.style.left), ay = parseFloat(al.style.top);
+              if(ly < ay + 32 && ly > ay && lx > ax - 8 && lx < ax + 36) {
+                al.remove(); lz.remove(); spaceScore += 50;
+                ultCharge = Math.min(100, ultCharge + 12);
+                updateUltBar();
+                document.getElementById('space-score').textContent = 'Skor: ' + spaceScore;
+              }
+            });
+          }
+        });
+      }, 20);
+    }
+
+    function updateUltBar() {
+      document.getElementById('ultFill').style.width = ultCharge + '%';
+      const btn = document.getElementById('btnUltTrigger');
+      if(ultCharge >= 100) {
+        btn.classList.add('ready');
+        btn.textContent = "🚀 MEGA ULTİ HAZIR! TIKLA/SPACE";
+      } else {
+        btn.classList.remove('ready');
+        btn.textContent = `🚀 ULTİ ŞARJ OLUYOR (%${Math.round(ultCharge)})`;
+      }
+    }
+
+    function fireUltBeam() {
+      if(ultCharge < 100) return;
+      const area = document.getElementById('space-area');
+      let beam = document.createElement('div'); beam.className = 'charge-beam';
+      beam.style.left = (shipX - 2) + 'px'; beam.style.top = '0px';
+      area.appendChild(beam);
+
+      if(shipX > 310) {
+         triggerEyeReaction("MEGA");
+      }
+
+      document.querySelectorAll('.vector-alien').forEach(al => {
+        if(Math.abs(parseFloat(al.style.left) - shipX) < 45) { al.remove(); spaceScore += 100; }
+      });
+
+      document.getElementById('space-score').textContent = 'Skor: ' + spaceScore;
+      ultCharge = 0;
+      updateUltBar();
+      setTimeout(() => beam.remove(), 250);
+    }
+
+    function triggerEyeReaction(type) {
+      const eye = document.getElementById('easterEggGuy');
+      const bubble = document.getElementById('speechBubble');
+      eye.style.transform = 'scale(1.3) rotate(20deg)';
+      
+      if(type === "MEGA") {
+          bubble.textContent = "ÇÜŞ MEGA ULTİ AMK! KÖR OLDUM!";
+      } else {
+          bubble.textContent = "Lan gözümü çıkardın!";
+      }
+      
+      bubble.style.display = 'block';
+      setTimeout(() => { eye.style.transform = 'scale(1)'; bubble.style.display = 'none'; }, 1500);
+    }
+
+
+    // ==========================================
+    // 4. PIXEL DUNGEON QUEST
+    // ==========================================
+    let dunGrid = [], pPos = 0, hp = 3, moveCounter = 0;
+    const GRID_SIZE = 36;
+
+    function initDungeon() {
+      const gEl = document.getElementById('dun-grid'); gEl.innerHTML = '';
+      hp = 3; moveCounter = 0; updateHp();
+      document.getElementById('dun-msg').textContent = 'Zindanı keşfet, duvarların etrafından dolaş!';
+      dunGrid = Array(GRID_SIZE).fill('');
+
+      let empty = Array.from({length: GRID_SIZE}, (_, i) => i);
+      
+      const wallCount = 6;
+      for(let i=0; i<wallCount; i++) {
+        let w = empty.splice(Math.floor(Math.random()*empty.length), 1)[0];
+        dunGrid[w] = 'WALL';
+      }
+
+      pPos = empty.splice(Math.floor(Math.random()*empty.length), 1)[0]; dunGrid[pPos] = 'HERO';
+      let dPos = empty.splice(Math.floor(Math.random()*empty.length), 1)[0]; dunGrid[dPos] = 'DOOR';
+      let potPos = empty.splice(Math.floor(Math.random()*empty.length), 1)[0]; dunGrid[potPos] = 'POTION';
+
+      let mCount = Math.floor(Math.random() * 2) + 2;
+      for(let i=0; i<mCount; i++) {
+        let m = empty.splice(Math.floor(Math.random()*empty.length), 1)[0];
+        dunGrid[m] = 'MONSTER';
+      }
+      dunGrid[empty.splice(Math.floor(Math.random()*empty.length), 1)[0]] = 'BONE';
+
+      for(let i=0; i<GRID_SIZE; i++) {
+        let cell = document.createElement('div');
+        cell.className = 'dun-cell fog';
+        if(dunGrid[i] === 'WALL') cell.classList.add('wall');
+        cell.onclick = () => moveDun(i);
+        gEl.appendChild(cell);
+      }
+      revealFog();
+    }
+
+    function moveDun(tPos) {
+      if(dunGrid[tPos] === 'WALL') return;
+
+      let diff = Math.abs(tPos - pPos);
+      if(diff !== 1 && diff !== 6) return;
+      if(diff === 1 && Math.floor(tPos/6) !== Math.floor(pPos/6)) return;
+
+      let tgt = dunGrid[tPos];
+      let msg = document.getElementById('dun-msg');
+
+      if(tgt === 'MONSTER') { hp--; updateHp(); dunGrid[tPos] = ''; msg.textContent = 'Canavarla dövüştün! -1 HP'; if(hp<=0){ alert('Öldün!'); initDungeon(); return;} }
+      else if(tgt === 'POTION') { hp = Math.min(3, hp + 1); updateHp(); dunGrid[tPos] = ''; msg.textContent = 'İksir içtin! +1 HP ❤️'; }
+      else if(tgt === 'BONE') { 
+        if(Math.random() < 0.5) { hp = Math.min(3, hp + 1); updateHp(); msg.textContent = 'Kemiklerin altından iksir çıktı!'; }
+        else msg.textContent = 'Kuru kemikleri ezdin.';
+        dunGrid[tPos] = '';
+      }
+      else if(tgt === 'DOOR') { msg.textContent = 'KAPIYI BULDUN! Sonraki kat...'; setTimeout(initDungeon, 1000); return; }
+
+      dunGrid[pPos] = ''; dunGrid[tPos] = 'HERO'; pPos = tPos;
+      moveCounter++;
+
+      if(moveCounter % 2 === 0) moveMonsters();
+      revealFog();
+    }
+
+    function moveMonsters() {
+      let monsters = [];
+      for(let i=0; i<GRID_SIZE; i++) if(dunGrid[i] === 'MONSTER') monsters.push(i);
+
+      let nextGrid = [...dunGrid];
+      
+      monsters.forEach(mPos => {
+        let mR = Math.floor(mPos/6), mC = mPos % 6;
+        let pR = Math.floor(pPos/6), pC = pPos % 6;
+
+        let candidates = [];
+        if(mR < pR && mPos + 6 < GRID_SIZE) candidates.push(mPos + 6);
+        if(mR > pR && mPos - 6 >= 0) candidates.push(mPos - 6);
+        if(mC < pC && (mPos + 1) % 6 !== 0) candidates.push(mPos + 1);
+        if(mC > pC && mPos % 6 !== 0) candidates.push(mPos - 1);
+
+        for(let target of candidates) {
+          if(nextGrid[target] === '') {
+            nextGrid[mPos] = ''; 
+            nextGrid[target] = 'MONSTER';
+            break; 
+          }
+        }
+      });
+      dunGrid = nextGrid;
+    }
+
+    function revealFog() {
+      const cells = document.getElementById('dun-grid').children;
+      let pR = Math.floor(pPos/6), pC = pPos % 6;
+
+      for(let i=0; i<GRID_SIZE; i++) {
+        let r = Math.floor(i/6), c = i % 6;
+        let isAdjacent = (Math.abs(r - pR) <= 1 && Math.abs(c - pC) <= 1);
+        
+        if(isAdjacent) {
+          cells[i].classList.remove('fog');
+          cells[i].innerHTML = SVG_ICONS[dunGrid[i].toLowerCase()] || '';
+        }
+      }
+    }
+
+    function updateHp() { document.getElementById('dun-hp').textContent = 'HP: ' + '❤️'.repeat(hp); }
+
+    // Başlat
+    renderCards(games);
+  </script>
+</body>
+</html>
